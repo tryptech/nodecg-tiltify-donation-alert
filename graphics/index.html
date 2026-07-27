@@ -42,16 +42,32 @@
             stage.addChild(alert.container);
 
             var donationsRep = nodecg.Replicant("donations", "nodecg-tiltify");
+            var trackedCampaignIdRep = nodecg.Replicant("trackedCampaignId", "nodecg-tiltify");
 
             donationsRep.on("change", function(newvalue, oldvalue) {
-                for (let i = 0; i < newvalue.length; i++) {
-                    if (newvalue[i].shown) {
-                        continue;
-                    }
-                    alert.notify(`${newvalue[i].name} Donated $${newvalue[i].amount}`, newvalue[i]);
-                    nodecg.sendMessageToBundle('mark-donation-as-shown', 'nodecg-tiltify', newvalue[i]);
+                // Skip the initial replicant dump so reloading the graphic
+                // does not replay the entire donation backlog.
+                if (!newvalue || !oldvalue) {
+                    return;
                 }
 
+                var previousIds = {};
+                for (let i = 0; i < oldvalue.length; i++) {
+                    previousIds[oldvalue[i].id] = true;
+                }
+
+                var currentCampaignId = trackedCampaignIdRep.value;
+                for (let i = 0; i < newvalue.length; i++) {
+                    var donation = newvalue[i];
+                    if (donation.shown || previousIds[donation.id]) {
+                        continue;
+                    }
+                    if (currentCampaignId && donation.campaign_id !== currentCampaignId) {
+                        continue;
+                    }
+                    alert.notify(`${donation.donor_name} Donated $${donation.amount.value}`, donation);
+                    nodecg.sendMessageToBundle('set-donation-shown', 'nodecg-tiltify', [donation, true]);
+                }
             });
 
         });
